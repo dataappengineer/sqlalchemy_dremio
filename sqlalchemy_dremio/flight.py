@@ -279,4 +279,3 @@ class DremioDialect_flight(default.DefaultDialect):
         super(DremioDialect_flight, self).do_execute_no_params(
             cursor, replaced_stmt, context
         )
-        
