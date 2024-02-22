@@ -4,7 +4,7 @@
 ![PyPI](https://img.shields.io/pypi/v/sqlalchemy_dremio.svg)
 ![Build](https://github.com/narendrans/sqlalchemy_dremio/workflows/Build/badge.svg)
 
-A SQLAlchemy dialect for Dremio via ODBC and Flight interfaces.
+A SQLAlchemy dialect for Dremio via an Arrow Flight interface.
 
 <!--ts-->
    * [Installation](#installation)
