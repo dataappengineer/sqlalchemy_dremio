@@ -265,4 +265,18 @@ class DremioDialect_flight(default.DefaultDialect):
 
     def get_view_names(self, connection, schema=None, **kwargs):
         return []
+    
+    # Workaround since Dremio does not support parameterized statements
+    def do_execute(self, cursor, statement, parameters, context):
+        replaced_stmt = statement
+        for v in parameters:
+            escaped_str = str(v).replace("'", "''")
+            if isinstance(v, (int, float)):
+                replaced_stmt = replaced_stmt.replace('?', escaped_str, 1)
+            else:
+                replaced_stmt = replaced_stmt.replace('?', "'" + escaped_str + "'", 1)
+
+        super(DremioDialect_flight, self).do_execute_no_params(
+            cursor, replaced_stmt, context
+        )
         
