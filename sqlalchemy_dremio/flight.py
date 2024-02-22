@@ -3,6 +3,7 @@ import re
 from sqlalchemy import schema, types, pool
 from sqlalchemy.engine import default, reflection
 from sqlalchemy.sql import compiler
+from sqlalchemy.sql import text
 
 _dialect_name = "dremio+flight"
 
@@ -150,6 +151,7 @@ class DremioDialect_flight(default.DefaultDialect):
 
     name = _dialect_name
     driver = _dialect_name
+    supports_statement_cache = False
     supports_sane_rowcount = False
     supports_sane_multi_rowcount = False
     poolclass = pool.SingletonThreadPool
@@ -190,8 +192,13 @@ class DremioDialect_flight(default.DefaultDialect):
 
         return [[";".join(connectors)], connect_args]
 
+    # @classmethod
+    # def dbapi(cls):
+    #     import sqlalchemy_dremio.db as module
+    #     return module
+    
     @classmethod
-    def dbapi(cls):
+    def import_dbapi(cls):
         import sqlalchemy_dremio.db as module
         return module
 
@@ -214,7 +221,7 @@ class DremioDialect_flight(default.DefaultDialect):
         sql = "DESCRIBE \"{0}\"".format(table_name)
         if schema != None and schema != "":
             sql = "DESCRIBE \"{0}\".\"{1}\"".format(schema, table_name)
-        cursor = connection.execute(sql)
+        cursor = connection.execute(text(sql))
         result = []
         for col in cursor:
             cname = col[0]
@@ -232,15 +239,16 @@ class DremioDialect_flight(default.DefaultDialect):
     @reflection.cache
     def get_table_names(self, connection, schema, **kw):
         sql = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA."TABLES"'
+
         if schema is not None:
             sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.\"TABLES\" WHERE TABLE_SCHEMA = '" + schema + "'"
 
-        result = connection.execute(sql)
+        result = connection.execute(text(sql))
         table_names = [r[0] for r in result]
         return table_names
 
     def get_schema_names(self, connection, schema=None, **kw):
-        result = connection.execute("SHOW SCHEMAS")
+        result = connection.execute(text("SHOW SCHEMAS"))
         schema_names = [r[0] for r in result]
         return schema_names
 
@@ -251,7 +259,7 @@ class DremioDialect_flight(default.DefaultDialect):
         sql += " WHERE TABLE_NAME = '" + str(table_name) + "'"
         if schema is not None and schema != "":
             sql += " AND TABLE_SCHEMA = '" + str(schema) + "'"
-        result = connection.execute(sql)
+        result = connection.execute(text(sql))
         countRows = [r[0] for r in result]
         return countRows[0] > 0
 
