@@ -66,6 +66,10 @@ The ODBC connection to superset is now deprecated. Please update sqlalchemy_drem
 Release Notes
 -------------
 
+3.0.4
+-----
+- Updates type mappings, added support for SQLAlchemy 2 & workaround for parameterized statements for flight
+
 3.0.3
 -----
 - Add back missing routing_engine property.
