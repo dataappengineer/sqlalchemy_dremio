@@ -8,36 +8,30 @@ from sqlalchemy import types
 import pyarrow as pa
 from pyarrow import flight
 
+# We're converting Arrow to a Pandas dataframe below, so we need to cover all supported pandas data types here. 
+# See: https://arrow.apache.org/docs/python/pandas.html#arrow-pandas-conversion
+# TODO (LJ): If we remove the conversion to pandas df we can switch to using native arrow types.
 _type_map = {
-    'boolean': types.BOOLEAN,
-    'BOOLEAN': types.BOOLEAN,
-    'bool': types.BOOLEAN,
-    'varbinary': types.LargeBinary,
-    'VARBINARY': types.LargeBinary,
-    'date': types.DATE,
-    'DATE': types.DATE,
-    'float64': types.FLOAT,
-    'float32': types.FLOAT,
-    'decimal': types.DECIMAL,
-    'DECIMAL': types.DECIMAL,
-    'double': types.FLOAT,
-    'DOUBLE': types.FLOAT,
-    'interval': types.Interval,
-    'INTERVAL': types.Interval,
-    'int32': types.INTEGER,
-    'int64': types.BIGINT,
-    'time': types.TIME,
-    'TIME': types.TIME,
+    'bool': types.Boolean(),
+    'int8': types.SmallInteger(),
+    'byte': types.SmallInteger(),
+    'int16': types.Integer(),
+    'int32': types.Integer(),
+    'int64': types.BigInteger(),
+    'float32': types.Float(precision=32),
+    'float64': types.Float(precision=64),
+    'string': types.String(),
+    'object': types.String(),
     'datetime64[ns]': types.DATETIME,
-    'timestamp': types.TIMESTAMP,
-    'TIMESTAMP': types.TIMESTAMP,
-    'varchar': types.VARCHAR,
-    'VARCHAR': types.VARCHAR,
-    'smallint': types.SMALLINT,
-    'CHARACTER VARYING': types.VARCHAR,
-    'object': types.VARCHAR
-}
 
+    # GH-33321: https://github.com/apache/arrow/pull/35656 - Support converting to non-nano datetime64 for pandas >= 2.0 
+    'datetime64[ms]': types.DATETIME,
+    'datetime64[s]': types.DATETIME,
+    'datetime64[us]': types.DATETIME,
+
+    #TODO (LJ): Handle unsigned integers?
+    #TODO (LJ): Handle timestamp with timezone?
+}
 
 def run_query(query, flightclient=None, options=None):
     info = flightclient.get_flight_info(flight.FlightDescriptor.for_command(query), options)
@@ -52,7 +46,9 @@ def run_query(query, flightclient=None, options=None):
             break
 
     data = pa.Table.from_batches(batches)
-    df = data.to_pandas()
+    
+    # TODO (LJ): Remove conversion to pandas dataframe?
+    df = data.to_pandas(date_as_object=False)
 
     return df
 

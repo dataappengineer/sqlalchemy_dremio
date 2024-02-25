@@ -1,42 +1,31 @@
-import re
-
 from sqlalchemy import schema, types, pool
 from sqlalchemy.engine import default, reflection
-from sqlalchemy.sql import compiler
-from sqlalchemy.sql import text
+from sqlalchemy.sql import compiler, text
 
 _dialect_name = "dremio+flight"
 
+# The following type map is for the data types output by the DESCRIBE command specified in get_columns
+# This is different from native arrow types or the pandas dataframe we convert to
+    # TODO (LJ): Find a better way to get columns and datatypes that match arrow types?
 _type_map = {
-    'boolean': types.BOOLEAN,
-    'BOOLEAN': types.BOOLEAN,
-    'varbinary': types.LargeBinary,
-    'VARBINARY': types.LargeBinary,
-    'date': types.DATE,
-    'DATE': types.DATE,
-    'float': types.FLOAT,
-    'FLOAT': types.FLOAT,
-    'decimal': types.DECIMAL,
-    'DECIMAL': types.DECIMAL,
-    'double': types.FLOAT,
-    'DOUBLE': types.FLOAT,
-    'interval': types.Interval,
-    'INTERVAL': types.Interval,
-    'int': types.INTEGER,
-    'INT': types.INTEGER,
-    'integer': types.INTEGER,
-    'INTEGER': types.INTEGER,
-    'bigint': types.BIGINT,
     'BIGINT': types.BIGINT,
-    'time': types.TIME,
-    'TIME': types.TIME,
-    'timestamp': types.TIMESTAMP,
-    'TIMESTAMP': types.TIMESTAMP,
-    'varchar': types.VARCHAR,
-    'VARCHAR': types.VARCHAR,
-    'smallint': types.SMALLINT,
+    'BINARY VARYING': types.VARBINARY,
+    'BOOLEAN': types.BOOLEAN,
     'CHARACTER VARYING': types.VARCHAR,
-    'ANY': types.VARCHAR
+    'DATE': types.DATE,
+    'DECIMAL': types.DECIMAL,
+    'DOUBLE': types.FLOAT,
+    'FLOAT': types.FLOAT,
+    'INTEGER': types.INTEGER,
+    'TIME': types.TIME,
+    'TIMESTAMP': types.TIMESTAMP,
+    
+    # TODO (LJ): Handle complex and other types better
+    'MAP': types.VARCHAR,
+    'ROW': types.VARCHAR, #Struct
+    'ARRAY': types.VARCHAR, #List
+    'INTERVAL': types.Interval, #NPE?
+    'ANY': types.VARCHAR,
 }
 
 
@@ -55,7 +44,9 @@ class DremioCompiler(compiler.SQLCompiler):
                 fixed_schema = ".".join(["\"" + i.replace('"', '') + "\"" for i in table.schema.split(".")])
                 fixed_table = fixed_schema + ".\"" + table.name.replace("\"", "") + "\""
             else:
-                fixed_table = "\"" + table.name.replace("\"", "") + "\""
+                # don't change anything. expect a fully and properly qualified path if no schema is passed.
+                fixed_table = table.name
+                # fixed_table = "\"" + table.name.replace("\"", "") + "\""
             return fixed_table
         else:
             return ""
@@ -192,10 +183,11 @@ class DremioDialect_flight(default.DefaultDialect):
 
         return [[";".join(connectors)], connect_args]
 
-    # @classmethod
-    # def dbapi(cls):
-    #     import sqlalchemy_dremio.db as module
-    #     return module
+    #for backward compatibility with older sqlalchemy versions
+    @classmethod
+    def dbapi(cls):
+        import sqlalchemy_dremio.db as module
+        return module
     
     @classmethod
     def import_dbapi(cls):
@@ -218,9 +210,9 @@ class DremioDialect_flight(default.DefaultDialect):
         return []
 
     def get_columns(self, connection, table_name, schema, **kw):
-        sql = "DESCRIBE \"{0}\"".format(table_name)
+        sql = "DESCRIBE /* sqlalchemy:get_columns */ \"{0}\"".format(table_name)
         if schema != None and schema != "":
-            sql = "DESCRIBE \"{0}\".\"{1}\"".format(schema, table_name)
+            sql = "DESCRIBE /* sqlalchemy:get_columns */ \"{0}\".\"{1}\"".format(schema, table_name)
         cursor = connection.execute(text(sql))
         result = []
         for col in cursor:
@@ -238,28 +230,26 @@ class DremioDialect_flight(default.DefaultDialect):
 
     @reflection.cache
     def get_table_names(self, connection, schema, **kw):
-        sql = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA."TABLES"'
-
-        if schema is not None:
-            sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.\"TABLES\" WHERE TABLE_SCHEMA = '" + schema + "'"
-
+        sql = 'SELECT /* sqlalchemy:get_table_names */ TABLE_NAME FROM INFORMATION_SCHEMA."TABLES"'
+        if schema != None and schema != "":
+            sql += " WHERE TABLE_SCHEMA = '" + str(schema) + "'"
         result = connection.execute(text(sql))
         table_names = [r[0] for r in result]
         return table_names
 
     def get_schema_names(self, connection, schema=None, **kw):
-        result = connection.execute(text("SHOW SCHEMAS"))
+        sql = 'SHOW /* sqlalchemy:get_schema_names */ SCHEMAS'
+        result = connection.execute(text(sql))
         schema_names = [r[0] for r in result]
         return schema_names
 
-
     @reflection.cache
     def has_table(self, connection, table_name, schema=None, **kw):
-        sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA."TABLES"'
+        sql = 'SELECT /* sqlalchemy:has_table */ COUNT(*) FROM INFORMATION_SCHEMA."TABLES"'
         sql += " WHERE TABLE_NAME = '" + str(table_name) + "'"
         if schema is not None and schema != "":
             sql += " AND TABLE_SCHEMA = '" + str(schema) + "'"
-        result = connection.execute(text(sql))
+        result = connection.execute(sql)
         countRows = [r[0] for r in result]
         return countRows[0] > 0
 
@@ -267,6 +257,7 @@ class DremioDialect_flight(default.DefaultDialect):
         return []
     
     # Workaround since Dremio does not support parameterized statements
+    # TODO (LJ): Get rid of this once Dremio supports them
     def do_execute(self, cursor, statement, parameters, context):
         replaced_stmt = statement
         for v in parameters:
