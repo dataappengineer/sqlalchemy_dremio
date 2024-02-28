@@ -39,7 +39,9 @@ Dremio Software:
 
 Dremio Cloud:
 
-`dremio+flight://data.dremio.cloud:443/?Token=<TOKEN>UseEncryption=true&disableCertificateVerification=true`
+`dremio+flight://data.dremio.cloud:443/?Token=<your_PAT>`
+
+See [here](https://docs.dremio.com/cloud/security/authentication/personal-access-token/#creating-a-pat) for how to generate a PAT. Make sure your PAT is URL Encoded.
 
 Options:
 
