@@ -49,7 +49,7 @@ Schema - (Optional) The schema to use
 
 TLS:
 
-UseEncryption=true|false - (Optional) Enables TLS connection. Must be enabled on Dremio to use it. 
+UseEncryption=true|false - (Optional) Enables TLS connection. If you are using Dremio Software, then encryption must be enabled on the Arrow Flight port the Dremio server to use it. 
 DisableCertificateVerification=true|false - (Optional) Disables certificate verirication.
 
 WLM:
