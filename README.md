@@ -68,6 +68,20 @@ The ODBC connection to superset is now deprecated. Please update sqlalchemy_drem
 Release Notes
 -------------
 
+3.0.5
+-----
+- **Enhanced Type Mapping System**: Expanded `_type_map` with comprehensive type mappings supporting both uppercase and lowercase variants for better compatibility
+- **Improved Data Type Support**: Added support for `LargeBinary` type for varbinary/VARBINARY data types and `SMALLINT` type mapping
+- **SQLAlchemy Compatibility Improvements**: Removed deprecated `supports_statement_cache` property and `import_dbapi` method for better SQLAlchemy 2.x compatibility  
+- **Enhanced Table Quoting**: Updated `visit_table` method to consistently quote table names when no schema is provided, ensuring proper SQL generation
+- **Streamlined SQL Execution**: 
+  - Removed SQL comment annotations (e.g., `/* sqlalchemy:get_columns */`) for cleaner query generation
+  - Removed `text()` wrapper from SQL execution calls for simplified execution
+  - Simplified `get_schema_names` method to directly execute "SHOW SCHEMAS"
+- **Improved Schema Handling**: Updated `get_table_names` method with cleaner conditional logic for schema filtering
+- **Removed Legacy Workarounds**: Eliminated the `do_execute` method that handled parameterized statement workarounds, relying on native SQLAlchemy handling
+- **Code Quality**: Added `import re` for future regex functionality and improved overall code organization
+
 3.0.4
 -----
 - Updates type mappings, added support for SQLAlchemy 2 & workaround for parameterized statements for flight
