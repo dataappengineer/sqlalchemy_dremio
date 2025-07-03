@@ -1,31 +1,42 @@
+import re
+
 from sqlalchemy import schema, types, pool
 from sqlalchemy.engine import default, reflection
-from sqlalchemy.sql import compiler, text
+from sqlalchemy.sql import compiler
 
 _dialect_name = "dremio+flight"
 
-# The following type map is for the data types output by the DESCRIBE command specified in get_columns
-# This is different from native arrow types or the pandas dataframe we convert to
-    # TODO (LJ): Find a better way to get columns and datatypes that match arrow types?
 _type_map = {
-    'BIGINT': types.BIGINT,
-    'BINARY VARYING': types.VARBINARY,
+    'boolean': types.BOOLEAN,
     'BOOLEAN': types.BOOLEAN,
-    'CHARACTER VARYING': types.VARCHAR,
+    'varbinary': types.LargeBinary,
+    'VARBINARY': types.LargeBinary,
+    'date': types.DATE,
     'DATE': types.DATE,
-    'DECIMAL': types.DECIMAL,
-    'DOUBLE': types.FLOAT,
+    'float': types.FLOAT,
     'FLOAT': types.FLOAT,
+    'decimal': types.DECIMAL,
+    'DECIMAL': types.DECIMAL,
+    'double': types.FLOAT,
+    'DOUBLE': types.FLOAT,
+    'interval': types.Interval,
+    'INTERVAL': types.Interval,
+    'int': types.INTEGER,
+    'INT': types.INTEGER,
+    'integer': types.INTEGER,
     'INTEGER': types.INTEGER,
+    'bigint': types.BIGINT,
+    'BIGINT': types.BIGINT,
+    'time': types.TIME,
     'TIME': types.TIME,
+    'timestamp': types.TIMESTAMP,
     'TIMESTAMP': types.TIMESTAMP,
-    
-    # TODO (LJ): Handle complex and other types better
-    'MAP': types.VARCHAR,
-    'ROW': types.VARCHAR, #Struct
-    'ARRAY': types.VARCHAR, #List
-    'INTERVAL': types.Interval, #NPE?
+    'varchar': types.VARCHAR,
+    'VARCHAR': types.VARCHAR,
+    'smallint': types.SMALLINT,
+    'CHARACTER VARYING': types.VARCHAR,
     'ANY': types.VARCHAR,
+    "BINARY VARYING": types.VARBINARY  # Added mapping for BINARY VARYING
 }
 
 
@@ -44,9 +55,7 @@ class DremioCompiler(compiler.SQLCompiler):
                 fixed_schema = ".".join(["\"" + i.replace('"', '') + "\"" for i in table.schema.split(".")])
                 fixed_table = fixed_schema + ".\"" + table.name.replace("\"", "") + "\""
             else:
-                # don't change anything. expect a fully and properly qualified path if no schema is passed.
-                fixed_table = table.name
-                # fixed_table = "\"" + table.name.replace("\"", "") + "\""
+                fixed_table = "\"" + table.name.replace("\"", "") + "\""
             return fixed_table
         else:
             return ""
@@ -142,7 +151,6 @@ class DremioDialect_flight(default.DefaultDialect):
 
     name = _dialect_name
     driver = _dialect_name
-    supports_statement_cache = False
     supports_sane_rowcount = False
     supports_sane_multi_rowcount = False
     poolclass = pool.SingletonThreadPool
@@ -188,11 +196,6 @@ class DremioDialect_flight(default.DefaultDialect):
     def dbapi(cls):
         import sqlalchemy_dremio.db as module
         return module
-    
-    @classmethod
-    def import_dbapi(cls):
-        import sqlalchemy_dremio.db as module
-        return module
 
     def connect(self, *cargs, **cparams):
         return self.dbapi.connect(*cargs, **cparams)
@@ -210,10 +213,10 @@ class DremioDialect_flight(default.DefaultDialect):
         return []
 
     def get_columns(self, connection, table_name, schema, **kw):
-        sql = "DESCRIBE /* sqlalchemy:get_columns */ \"{0}\"".format(table_name)
+        sql = "DESCRIBE \"{0}\"".format(table_name)
         if schema != None and schema != "":
-            sql = "DESCRIBE /* sqlalchemy:get_columns */ \"{0}\".\"{1}\"".format(schema, table_name)
-        cursor = connection.execute(text(sql))
+            sql = "DESCRIBE \"{0}\".\"{1}\"".format(schema, table_name)
+        cursor = connection.execute(sql)
         result = []
         for col in cursor:
             cname = col[0]
@@ -230,22 +233,22 @@ class DremioDialect_flight(default.DefaultDialect):
 
     @reflection.cache
     def get_table_names(self, connection, schema, **kw):
-        sql = 'SELECT /* sqlalchemy:get_table_names */ TABLE_NAME FROM INFORMATION_SCHEMA."TABLES"'
-        if schema != None and schema != "":
-            sql += " WHERE TABLE_SCHEMA = '" + str(schema) + "'"
-        result = connection.execute(text(sql))
+        sql = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA."TABLES"'
+        if schema is not None:
+            sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.\"TABLES\" WHERE TABLE_SCHEMA = '" + schema + "'"
+
+        result = connection.execute(sql)
         table_names = [r[0] for r in result]
         return table_names
 
     def get_schema_names(self, connection, schema=None, **kw):
-        sql = 'SHOW /* sqlalchemy:get_schema_names */ SCHEMAS'
-        result = connection.execute(text(sql))
+        result = connection.execute("SHOW SCHEMAS")
         schema_names = [r[0] for r in result]
         return schema_names
 
     @reflection.cache
     def has_table(self, connection, table_name, schema=None, **kw):
-        sql = 'SELECT /* sqlalchemy:has_table */ COUNT(*) FROM INFORMATION_SCHEMA."TABLES"'
+        sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA."TABLES"'
         sql += " WHERE TABLE_NAME = '" + str(table_name) + "'"
         if schema is not None and schema != "":
             sql += " AND TABLE_SCHEMA = '" + str(schema) + "'"
@@ -255,18 +258,3 @@ class DremioDialect_flight(default.DefaultDialect):
 
     def get_view_names(self, connection, schema=None, **kwargs):
         return []
-    
-    # Workaround since Dremio does not support parameterized statements
-    # TODO (LJ): Get rid of this once Dremio supports them
-    def do_execute(self, cursor, statement, parameters, context):
-        replaced_stmt = statement
-        for v in parameters:
-            escaped_str = str(v).replace("'", "''")
-            if isinstance(v, (int, float)):
-                replaced_stmt = replaced_stmt.replace('?', escaped_str, 1)
-            else:
-                replaced_stmt = replaced_stmt.replace('?', "'" + escaped_str + "'", 1)
-
-        super(DremioDialect_flight, self).do_execute_no_params(
-            cursor, replaced_stmt, context
-        )
