@@ -90,13 +90,25 @@ def test_dialect_changes():
         else:
             print("✗ supports_statement_cache still set to False")
         
-        # Test 2: dbapi method should exist
+        # Test 2: dbapi method should exist and be callable
         total_tests += 1
-        if hasattr(dialect, 'dbapi') and callable(dialect.dbapi):
-            print("✓ dbapi method exists for backward compatibility")
-            tests_passed += 1
+        # For classmethods, we need to check both class and instance access
+        class_has_dbapi = hasattr(DremioDialect_flight, 'dbapi') and callable(getattr(DremioDialect_flight, 'dbapi', None))
+        instance_can_access = hasattr(dialect, '__class__') and hasattr(dialect.__class__, 'dbapi')
+        
+        if class_has_dbapi and instance_can_access:
+            try:
+                # Test that we can actually call it
+                dbapi_module = dialect.__class__.dbapi()
+                if hasattr(dbapi_module, 'connect'):
+                    print("✓ dbapi method exists and works correctly")
+                    tests_passed += 1
+                else:
+                    print("✗ dbapi method exists but doesn't return proper module")
+            except Exception as e:
+                print(f"✗ dbapi method exists but fails when called: {e}")
         else:
-            print("✗ dbapi method missing or not callable")
+            print("✗ dbapi method missing or not accessible")
         
         # Test 3: import_dbapi method should be removed
         total_tests += 1
