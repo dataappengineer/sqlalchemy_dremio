@@ -13,7 +13,7 @@ from sqlalchemy_dremio.query import execute
 
 logger = logging.getLogger(__name__)
 
-paramstyle = 'qmark'
+paramstyle = 'pyformat'
 
 
 def connect(c):
