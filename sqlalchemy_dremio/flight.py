@@ -198,7 +198,7 @@ class DremioDialect_flight(default.DefaultDialect):
         return module
 
     def connect(self, *cargs, **cparams):
-        return self.dbapi.connect(*cargs, **cparams)
+        return self.__class__.dbapi().connect(*cargs, **cparams)
 
     def last_inserted_ids(self):
         return self.context.last_inserted_ids
